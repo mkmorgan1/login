@@ -1,9 +1,13 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
+const initializePassport = require('./passport-config');
+const passport = require('passport');
 const app = express();
 const PORT = 3030;
 
 const users = [];
+
+initializePassport(passport);
 
 app.set('view-engin', 'ejs');
 app.use(express.urlencoded({ extended: false }));
