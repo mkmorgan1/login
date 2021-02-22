@@ -1,32 +1,57 @@
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
+
 const express = require('express');
 const bcrypt = require('bcrypt');
-const initializePassport = require('./passport-config');
+const initializePassport = require('./passport-config.js');
 const passport = require('passport');
+const flash = require('express-flash');
+const session = require('express-session');
+const { request } = require('express');
+const methodOverride = require('method-override')
 const app = express();
 const PORT = 3030;
 
 const users = [];
 
-initializePassport(passport);
+initializePassport(
+  passport,
+  email => users.find(user => user.email === email),
+  id => users.find(user => user.id === id),
+);
 
 app.set('view-engin', 'ejs');
 app.use(express.urlencoded({ extended: false }));
+app.use(flash());
+app.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false
+}));
 
-app.get('/', (req, res) => {
-  res.render('index.ejs', { user: 'kyle' });
+app.use(passport.initialize());
+app.use(passport.session());
+app.use(methodOverride('_method'))
+
+app.get('/', checkAuthenticated, (req, res) => {
+  res.render('index.ejs', { user: req.user.name });
 });
 
-app.get('/login', (req, res) => {
+app.get('/login', checkNotAuthenticated, (req, res) => {
   res.render('login.ejs');
 });
-app.post('/login', (req, res) => {
+app.post('/login', checkNotAuthenticated, passport.authenticate('local', {
+  successRedirect: '/',
+  failureRedirect: '/login',
+  failureFlash: true,
 
-});
+}));
 
-app.get('/register', (req, res) => {
+app.get('/register', checkNotAuthenticated, (req, res) => {
   res.render('register.ejs');
 });
-app.post('/register', async (req, res) => {
+app.post('/register', checkNotAuthenticated, async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(req.body.password, 10);
     const user = {
@@ -42,6 +67,27 @@ app.post('/register', async (req, res) => {
   }
   console.log(users)
 });
+
+app.delete('/logout', (req,res) => {
+  req.logOut();
+  res.redirect('/login');
+})
+
+function checkAuthenticated(req, res, next) {
+  if (req.isAuthenticated()) {
+    return next();
+  } else {
+    res.redirect('/login')
+  }
+}
+
+function checkNotAuthenticated(req, res, next) {
+  if (req.isAuthenticated()) {
+    return res.redirect('/')
+  } else {
+    next();
+  }
+}
 
 
 app.listen(PORT, () => {
